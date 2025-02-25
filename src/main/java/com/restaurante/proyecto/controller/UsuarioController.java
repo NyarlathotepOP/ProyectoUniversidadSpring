@@ -1,6 +1,5 @@
 package com.restaurante.proyecto.controller;
 
-import java.util.List;
 import java.util.Locale;
 
 import org.springframework.context.MessageSource;
@@ -51,10 +50,15 @@ public class UsuarioController {
     @Operation(summary = "Obtener todos los usuarios (solo admins)")
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public List<Usuario> listarUsuarios() {
-        return usuarioRepository.findAll();
+    public ResponseEntity<?> listarUsuarios(Locale locale) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN"))) {
+            return ResponseEntity.status(403).body(messageSource.getMessage("error.access.denied", null, locale));
+        }
+        return ResponseEntity.ok(usuarioRepository.findAll());
     }
-
+    
     @Operation(summary = "Obtener un usuario por cédula solo la del usuario autenticado o un admin")
     @GetMapping("/{cedula}")
     @PreAuthorize("isAuthenticated()")
