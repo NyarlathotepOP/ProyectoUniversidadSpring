@@ -6,6 +6,9 @@ import org.springframework.context.annotation.Configuration;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 
+// Configuración de Swagger para la documentación de la API de reservas del restaurante
+// Se establece el título, la versión y la descripción de la API para mostrar en la documentación
+
 @Configuration
 public class SwaggerConfig {
     @Bean

@@ -6,18 +6,24 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.support.ReloadableResourceBundleMessageSource;
-import org.springframework.web.servlet.LocaleResolver;
-import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
+import org.springframework.web.server.i18n.AcceptHeaderLocaleContextResolver;
+import org.springframework.web.server.i18n.LocaleContextResolver;
+
+// Configuración de la aplicación para internacionalización
 
 @Configuration
 public class ApplicationConfig {
 
+    // Resolver de contexto de localización para aceptar la localización de la cabecera HTTP Accept-Language
+
     @Bean
-    public LocaleResolver localeResolver() {
-        AcceptHeaderLocaleResolver localeResolver = new AcceptHeaderLocaleResolver();
-        localeResolver.setDefaultLocale(Locale.ENGLISH);
-        return localeResolver;
+    public LocaleContextResolver localeContextResolver() {
+        AcceptHeaderLocaleContextResolver Resolver = new AcceptHeaderLocaleContextResolver();
+        Resolver.setDefaultLocale(Locale.ENGLISH);
+        return Resolver;
     }
+
+    // Configuración de la fuente de mensajes para cargar los mensajes de los archivos de propiedades
 
     @Bean
     public MessageSource messageSource() {

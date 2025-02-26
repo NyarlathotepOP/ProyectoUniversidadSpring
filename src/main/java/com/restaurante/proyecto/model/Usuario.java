@@ -3,6 +3,10 @@ package com.restaurante.proyecto.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+// Clase para representar un usuario en la aplicación
+// Se utiliza para almacenar la información de un usuario en la base de datos MongoDB con Spring Data MongoDB
+// Se establece la colección "usuarios" para almacenar los usuarios en la base de datos
+
 @Document(collection = "usuarios")
 public class Usuario {
     @Id

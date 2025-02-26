@@ -3,6 +3,10 @@ package com.restaurante.proyecto.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+// Clase para representar una reserva en el restaurante
+// Se utiliza para almacenar la información de una reserva en la base de datos MongoDB con Spring Data MongoDB
+// Se establece la colección "reservas" para almacenar las reservas en la base de datos
+
 @Document(collection = "reservas")
 public class Reserva {
     @Id
