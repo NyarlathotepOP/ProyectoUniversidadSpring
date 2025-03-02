@@ -3,6 +3,8 @@ package com.restaurante.proyecto.model;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import com.aventrix.jnanoid.jnanoid.NanoIdUtils;
+
 // Clase para representar una reserva en el restaurante
 // Se utiliza para almacenar la información de una reserva en la base de datos MongoDB con Spring Data MongoDB
 // Se establece la colección "reservas" para almacenar las reservas en la base de datos
@@ -10,12 +12,16 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "reservas")
 public class Reserva {
     @Id
-    private String id;
+    // Se genera un identificador único para cada reserva con NanoId
+    private String id = NanoIdUtils.randomNanoId(new java.util.Random(), DIGITS, 5);
     private String usuario;
     private String nombreCliente;
     private String cedula;
     private String fecha;
     private int numeroPersonas;
+
+    // Caracteres para generar el identificador único de la reserva con NanoId
+    private static final char [] DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".toCharArray();
 
     public Reserva(String usuario, String cedula, String nombreCliente, String fecha, int numeroPersonas) {
         this.usuario = usuario;

@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.restaurante.proyecto.model.Reserva;
 import com.restaurante.proyecto.repository.ReservaRepository;
+import com.restaurante.proyecto.repository.UsuarioRepository;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,10 +34,12 @@ public class ReservaController {
 
     private final ReservaRepository repository;
     private final MessageSource messageSource;
+    private final UsuarioRepository usuarioRepository;
 
-    public ReservaController(ReservaRepository repository, MessageSource messageSource) {
+    public ReservaController(ReservaRepository repository, MessageSource messageSource, UsuarioRepository usuarioRepository) {
         this.repository = repository;
         this.messageSource = messageSource;
+        this.usuarioRepository = usuarioRepository;
     }
 
     // Obtener todas las reservas del restaurante (solo admins)
@@ -63,27 +66,47 @@ public class ReservaController {
     // Se establece un endpoint para obtener una reserva del restaurante por cédula de cliente
     // Se verifica si el usuario autenticado es el mismo que creó la reserva o si es un admin para permitir el acceso a la reserva
 
-    @Operation(summary = "Obtener una reserva por cédula (solo para el usuario autenticado o un admin)")
+    @Operation(summary = "Obtener reservas por cédula (solo para el usuario autenticado o un admin)")
     @GetMapping("/{cedula}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ResponseEntity<?>> obtenerReserva(@PathVariable String cedula, Locale locale) {
+    public Mono<ResponseEntity<?>> obtenerReservas(@PathVariable String cedula, Locale locale) {
         return ReactiveSecurityContextHolder.getContext()
-            .map(ctx -> ctx.getAuthentication())
-            .flatMap(auth ->
-                repository.findByCedula(cedula).flatMap(reserva -> {
-                    boolean esAdmin = auth.getAuthorities().stream()
-                            .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-                    if (esAdmin || reserva.getUsuario().equals(auth.getName())) {
-                        return Mono.just(ResponseEntity.ok(reserva));
-                    } else {
-                        String mensaje = messageSource.getMessage("error.access.denied", null, locale);
-                        return Mono.just(ResponseEntity.status(403).body(mensaje));
-                    }
-                }).switchIfEmpty(Mono.defer(() -> {
-                    String mensaje = messageSource.getMessage("reservation.not.found", null, locale);
-                    return Mono.just(ResponseEntity.status(404).body(mensaje));
-                }))
-            );
+            .flatMap(ctx -> {
+                var auth = ctx.getAuthentication();
+                boolean esAdmin = auth.getAuthorities().stream()
+                                        .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                if (esAdmin) {
+                    return repository.findByCedula(cedula)
+                        .collectList()
+                        .flatMap(list -> {
+                            if (list.isEmpty()) {
+                                String mensaje = messageSource.getMessage("reservation.not.found", null, locale);
+                                return Mono.just(ResponseEntity.status(404).body(mensaje));
+                            } else {
+                                return Mono.just(ResponseEntity.ok(list));
+                            }
+                        });
+                } else {
+                    return usuarioRepository.findByUsername(auth.getName())
+                        .flatMap(user -> {
+                            if (!user.getCedula().equals(cedula)) {
+                                String mensaje = messageSource.getMessage("error.access.denied", null, locale);
+                                return Mono.just(ResponseEntity.status(403).body(mensaje));
+                            } else {
+                                return repository.findByCedula(cedula)
+                                    .collectList()
+                                    .flatMap(list -> {
+                                        if (list.isEmpty()) {
+                                            String mensaje = messageSource.getMessage("reservation.not.found", null, locale);
+                                            return Mono.just(ResponseEntity.status(404).body(mensaje));
+                                        } else {
+                                            return Mono.just(ResponseEntity.ok(list));
+                                        }
+                                    });
+                            }
+                        });
+                }
+            });
     }
 
     // Crear una reserva
@@ -95,61 +118,69 @@ public class ReservaController {
     public Mono<ResponseEntity<String>> creaReserva(@RequestBody Reserva reserva, Locale locale) {
         return ReactiveSecurityContextHolder.getContext()
             .map(ctx -> ctx.getAuthentication())
-            .flatMap(auth -> {
-                reserva.setUsuario(auth.getName());
-                return repository.save(reserva)
-                    .then(Mono.just(ResponseEntity.ok(
-                        messageSource.getMessage("reservation.success", null, locale))));
-            });
+            .flatMap(auth ->
+                usuarioRepository.findByUsername(auth.getName())
+                    .flatMap(user -> {
+                        reserva.setUsuario(auth.getName());
+                        reserva.setCedula(user.getCedula());
+                        return repository.save(reserva);
+                    })
+            )
+            .then(Mono.just(ResponseEntity.ok(
+                messageSource.getMessage("reservation.success", null, locale)
+            )));
     }
 
     // Actualizar una reserva buscada por cédula (solo para el usuario autenticado o un admin)
     // Se establece un endpoint para actualizar una reserva del restaurante buscada por cédula de cliente
 
-    @Operation(summary = "Actualizar una reserva buscada por cédula (solo para el usuario autenticado o un admin)")
-    @PutMapping("/{cedula}")
+    @Operation(summary = "Actualizar una reserva buscada por id (solo para el usuario autenticado o un admin)")
+    @PutMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ResponseEntity<String>> actualizarReserva(@PathVariable String cedula, @RequestBody Reserva nuevaReserva, Locale locale) {
+    public Mono<ResponseEntity<String>> actualizarReserva(@PathVariable String id, @RequestBody Reserva nuevaReserva, Locale locale) {
         return ReactiveSecurityContextHolder.getContext()
             .map(ctx -> ctx.getAuthentication())
             .flatMap(auth -> {
                 String username = auth.getName();
                 boolean esAdmin = auth.getAuthorities().stream()
-                        .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN"));
-                return repository.findByCedula(cedula).flatMap(reserva -> {
+                        .anyMatch(grantedAuthority -> 
+                            grantedAuthority.getAuthority().equals("ROLE_ADMIN"));
+                return repository.findById(id).flatMap(reserva -> {
                     if (esAdmin || reserva.getUsuario().equals(username)) {
                         reserva.setNombreCliente(nuevaReserva.getNombreCliente());
                         reserva.setFecha(nuevaReserva.getFecha());
                         reserva.setNumeroPersonas(nuevaReserva.getNumeroPersonas());
                         return repository.save(reserva)
-                                .then(Mono.just(ResponseEntity.ok(messageSource.getMessage("reservation.update.success", null, locale))));
+                            .then(Mono.just(ResponseEntity.ok(
+                                messageSource.getMessage("reservation.update.success", null, locale))));
                     } else {
                         return Mono.just(ResponseEntity.status(403)
-                                .body(messageSource.getMessage("reservation.update.denied", null, locale)));
+                            .body(messageSource.getMessage("reservation.update.denied", null, locale)));
                     }
                 }).switchIfEmpty(Mono.defer(() ->
                         Mono.just(ResponseEntity.status(404)
-                                .body(messageSource.getMessage("reservation.not.found", null, locale)))));
+                            .body(messageSource.getMessage("reservation.not.found", null, locale)))));
             });
-    }
+    }    
 
     // Eliminar una reserva por cédula (solo para el usuario autenticado o un admin)
     // Se establece un endpoint para eliminar una reserva del restaurante por cédula de cliente
 
-    @Operation(summary = "Eliminar una reserva por cédula (solo para el usuario autenticado o un admin)")
-    @DeleteMapping("/{cedula}")
+    @Operation(summary = "Eliminar una reserva por id (solo para el usuario autenticado o un admin)")
+    @DeleteMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public Mono<ResponseEntity<String>> eliminarReserva(@PathVariable String cedula, Locale locale) {
+    public Mono<ResponseEntity<String>> eliminarReserva(@PathVariable String id, Locale locale) {
         return ReactiveSecurityContextHolder.getContext()
             .map(ctx -> ctx.getAuthentication())
             .flatMap(auth -> {
                 String username = auth.getName();
                 boolean esAdmin = auth.getAuthorities().stream()
                         .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_ADMIN"));
-                return repository.findByCedula(cedula).flatMap(reserva -> {
+                return repository.findById(id).flatMap(reserva -> {
                     if (esAdmin || reserva.getUsuario().equals(username)) {
                         return repository.delete(reserva)
-                                .then(Mono.just(ResponseEntity.ok(messageSource.getMessage("reservation.deleted", null, locale))));
+                                .then(Mono.just(ResponseEntity.ok(
+                                        messageSource.getMessage("reservation.deleted", null, locale))));
                     } else {
                         return Mono.just(ResponseEntity.status(403)
                                 .body(messageSource.getMessage("reservation.delete.denied", null, locale)));
