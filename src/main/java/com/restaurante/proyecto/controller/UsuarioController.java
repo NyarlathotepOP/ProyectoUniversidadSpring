@@ -62,13 +62,23 @@ public class UsuarioController {
 
     @Operation(summary = "Obtener todos los usuarios (solo admins)")
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<?>> listarUsuarios(Locale locale) {
-        return usuarioRepository.findAll()
-                .collectList()
-                .map(list -> ResponseEntity.ok(list));
+        return ReactiveSecurityContextHolder.getContext()
+            .map(ctx -> ctx.getAuthentication())
+            .flatMap(auth -> {
+                boolean esAdmin = auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                if (esAdmin) {
+                    return usuarioRepository.findAll()
+                        .collectList()
+                        .map(lista -> ResponseEntity.ok(lista));
+                } else {
+                    String mensaje = messageSource.getMessage("error.access.denied", null, locale);
+                    return Mono.just(ResponseEntity.status(403).body(mensaje));
+                }
+            });
     }
-
+    
     // Obtener un usuario por cédula (solo la del usuario autenticado o un admin)
     // Se establece un endpoint para obtener un usuario registrado en la aplicación por su cédula (solo para el usuario autenticado o un admin)
     
@@ -100,35 +110,57 @@ public class UsuarioController {
 
     @Operation(summary = "Actualizar un usuario (solo admins)")
     @PutMapping("/{cedula}")
-    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<String>> actualizarUsuario(@PathVariable String cedula, @RequestBody Usuario usuarioActualizado, Locale locale) {
-        return usuarioRepository.findByCedula(cedula)
-                .flatMap(usuario -> {
-                    usuario.setUsername(usuarioActualizado.getUsername());
-                    if (usuarioActualizado.getPassword() != null && !usuarioActualizado.getPassword().isEmpty()) {
-                        usuario.setPassword(passwordEncoder.encode(usuarioActualizado.getPassword()));
-                    }
-                    usuario.setRole(usuarioActualizado.getRole());
-                    return usuarioRepository.save(usuario)
-                            .then(Mono.just(ResponseEntity.ok(
-                                    messageSource.getMessage("user.update.success", null, locale))));
-                })
-                .switchIfEmpty(Mono.just(ResponseEntity.status(404)
+        return ReactiveSecurityContextHolder.getContext()
+            .map(ctx -> ctx.getAuthentication())
+            .flatMap(auth -> {
+                boolean esAdmin = auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                if (!esAdmin) {
+                    String mensaje = messageSource.getMessage("error.access.denied", null, locale);
+                    return Mono.just(ResponseEntity.status(403).body(mensaje));
+                }
+                return usuarioRepository.findByCedula(cedula)
+                    .flatMap(usuario -> {
+                        if (usuarioActualizado.getUsername() != null && !usuarioActualizado.getUsername().isEmpty()) {
+                            usuario.setUsername(usuarioActualizado.getUsername());
+                        }
+                        if (usuarioActualizado.getPassword() != null && !usuarioActualizado.getPassword().isEmpty()) {
+                            usuario.setPassword(passwordEncoder.encode(usuarioActualizado.getPassword()));
+                        }
+                        if (usuarioActualizado.getRole() != null) {
+                            usuario.setRole(usuarioActualizado.getRole());
+                        }
+                        return usuarioRepository.save(usuario)
+                            .thenReturn(ResponseEntity.ok(
+                                messageSource.getMessage("user.update.success", null, locale)));
+                    })
+                    .switchIfEmpty(Mono.just(ResponseEntity.status(404)
                         .body(messageSource.getMessage("user.not.found", null, locale))));
+            });
     }
-
+    
     // Eliminar un usuario (solo admins)
     // Se establece un endpoint para eliminar un usuario registrado en la aplicación por su cédula (solo para usuarios con rol de admin)
 
     @Operation(summary = "Eliminar un usuario (solo admins)")
     @DeleteMapping("/{cedula}")
-    @PreAuthorize("hasRole('ADMIN')")
     public Mono<ResponseEntity<String>> eliminarUsuario(@PathVariable String cedula, Locale locale) {
-        return usuarioRepository.findByCedula(cedula)
-                .flatMap(usuario -> usuarioRepository.delete(usuario)
-                        .then(Mono.just(ResponseEntity.ok(
-                                messageSource.getMessage("user.delete.success", null, locale)))))
-                .switchIfEmpty(Mono.just(ResponseEntity.status(404)
+        return ReactiveSecurityContextHolder.getContext()
+            .map(ctx -> ctx.getAuthentication())
+            .flatMap(auth -> {
+                boolean esAdmin = auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+                if (!esAdmin) {
+                    String mensaje = messageSource.getMessage("error.access.denied", null, locale);
+                    return Mono.just(ResponseEntity.status(403).body(mensaje));
+                }
+                return usuarioRepository.findByCedula(cedula)
+                    .flatMap(usuario -> usuarioRepository.delete(usuario)
+                        .thenReturn(ResponseEntity.ok(
+                            messageSource.getMessage("user.delete.success", null, locale))))
+                    .switchIfEmpty(Mono.just(ResponseEntity.status(404)
                         .body(messageSource.getMessage("user.not.found", null, locale))));
+            });
     }
 }
