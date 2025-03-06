@@ -46,6 +46,15 @@ public class UsuarioController {
         this.passwordEncoder = passwordEncoder;
     }
 
+    // Se establece un método para formatear el rol de usuario agregando el prefijo "ROLE_" si no lo tiene
+
+    private String formatRol(String role) {
+        if (!role.startsWith("ROLE_")) {
+            return "ROLE_" + role.toUpperCase();
+        }
+        return role.toUpperCase();
+    }
+
     // Registrar un usuario
     // Se establece un endpoint para registrar un nuevo usuario en la aplicación con un nombre de usuario, cedula, contraseña y rol de usuario o admin
 
@@ -129,7 +138,7 @@ public class UsuarioController {
                             usuario.setPassword(passwordEncoder.encode(usuarioActualizado.getPassword()));
                         }
                         if (usuarioActualizado.getRole() != null) {
-                            usuario.setRole(usuarioActualizado.getRole());
+                            usuario.setRole(formatRol(usuarioActualizado.getRole()));
                         }
                         return usuarioRepository.save(usuario)
                             .thenReturn(ResponseEntity.ok(
