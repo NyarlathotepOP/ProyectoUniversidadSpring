@@ -1,7 +1,7 @@
 # Sistema de Gestión de Reservas para Restaurante
 
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.1.5-green)](https://spring.io/projects/spring-boot)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-blue)](https://www.mongodb.com)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.3-green)](https://spring.io/projects/spring-boot)
+[![MongoDB](https://img.shields.io/badge/MongoDB-8.0-blue)](https://www.mongodb.com)
 [![JWT](https://img.shields.io/badge/JWT-Auth-orange)](https://jwt.io)
 
 Proyecto universitario final.
